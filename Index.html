@@ -121,6 +121,112 @@
     text-align:center;
     margin-top:10px;
   }
+  .manager-card{
+    border-color:#d9c9a8;
+  }
+  .manager-card h2{
+    font-size:16px;
+    margin:0 0 12px;
+    color:var(--muted);
+    font-weight:600;
+  }
+  .lock-row{
+    display:flex;
+    gap:8px;
+  }
+  .lock-row input{
+    flex:1;
+    padding:10px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    font-size:14px;
+  }
+  .lock-row button{
+    padding:10px 14px;
+    border-radius:8px;
+    border:none;
+    background:var(--ink);
+    color:#fff;
+    cursor:pointer;
+    font-size:14px;
+  }
+  .manager-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:8px;
+  }
+  .manager-row .name{
+    width:90px;
+    flex-shrink:0;
+    font-size:14px;
+  }
+  .manager-row input{
+    width:70px;
+    padding:6px 8px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    font-size:14px;
+  }
+  .manager-row input:disabled{
+    background:#f2ead9;
+    color:var(--muted);
+  }
+  .save-btn{
+    margin-top:10px;
+    padding:10px 16px;
+    border-radius:8px;
+    border:none;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+    font-size:14px;
+  }
+  .save-btn:disabled{
+    opacity:.4;
+    cursor:not-allowed;
+  }
+  .dev-card{
+    border-color:#c9a8a8;
+  }
+  .dev-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:8px;
+  }
+  .dev-row .name{
+    width:80px;
+    flex-shrink:0;
+    font-size:14px;
+  }
+  .dev-row .val{
+    width:60px;
+    font-size:13px;
+    color:var(--muted);
+  }
+  .mini-btn{
+    padding:6px 10px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:#fff;
+    cursor:pointer;
+    font-size:13px;
+  }
+  .mini-btn:hover{
+    border-color:#c9a8a8;
+    background:#fdf0f0;
+  }
+  .reset-all-btn{
+    margin-top:14px;
+    padding:10px 16px;
+    border-radius:8px;
+    border:none;
+    background:#b34d4d;
+    color:#fff;
+    cursor:pointer;
+    font-size:14px;
+  }
 </style>
 </head>
 <body>
@@ -138,10 +244,50 @@
     <div id="results"></div>
   </div>
 
+  <div class="card manager-card">
+    <h2>Баллы от руководителя</h2>
+    <div id="lockBox" class="lock-row">
+      <input type="password" id="managerPass" placeholder="Пароль руководителя">
+      <button onclick="unlockManager()">Войти</button>
+    </div>
+    <div id="managerBox" style="display:none; margin-top:14px;"></div>
+    <button id="saveManagerBtn" class="save-btn" style="display:none;" onclick="saveManagerScores()">Сохранить баллы</button>
+  </div>
+
+  <div class="card dev-card">
+    <h2>Панель разработчика</h2>
+    <div id="devLockBox" class="lock-row">
+      <input type="password" id="devPass" placeholder="Пароль разработчика">
+      <button onclick="unlockDev()">Войти</button>
+    </div>
+    <div id="devBox" style="display:none; margin-top:14px;"></div>
+    <button id="resetAllBtn" class="reset-all-btn" style="display:none;" onclick="resetAll()">Обнулить всё</button>
+  </div>
+
   <div class="footer-note">Голоса видны всем, но кто за кого голосовал — не сохраняется.</div>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+import {
+  getFirestore, doc, getDoc, setDoc, updateDoc, increment
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+
+// Вставь сюда свой конфиг из Firebase Console -> Project Settings -> Your apps
+const firebaseConfig = {
+  apiKey: "AIzaSyCptcLHUBTRG_ZQWXJPcWNK6pbE6g33Kgw",
+  authDomain: "pozitive-4bb25.firebaseapp.com",
+  projectId: "pozitive-4bb25",
+  storageBucket: "pozitive-4bb25.firebasestorage.app",
+  messagingSenderId: "798918448099",
+  appId: "1:798918448099:web:7ec5bdeeba44c336f286d6"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const RESULTS_DOC = doc(db, "positive_vote", "results");
+
 const PARTICIPANTS = ["Халида","Айчурок","Эрбол","Айбек","Наталья","Элдияр","Эмиль"];
 
 function todayKey(){
@@ -149,30 +295,31 @@ function todayKey(){
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
 
-async function getVotes(){
-  try{
-    const res = await window.storage.get("votes", true);
-    return res ? JSON.parse(res.value) : {};
-  }catch(e){
-    return {};
+async function getDocData(){
+  const snap = await getDoc(RESULTS_DOC);
+  if(!snap.exists()){
+    await setDoc(RESULTS_DOC, { votes: {}, manager: {} });
+    return { votes: {}, manager: {} };
   }
+  const data = snap.data();
+  return { votes: data.votes || {}, manager: data.manager || {} };
 }
 
-async function saveVotes(votes){
-  await window.storage.set("votes", JSON.stringify(votes), true);
-}
-
-async function getLastVoteDate(){
-  try{
-    const res = await window.storage.get("last_vote_date", false);
-    return res ? res.value : null;
-  }catch(e){
-    return null;
+async function incrementVote(name){
+  const snap = await getDoc(RESULTS_DOC);
+  if(!snap.exists()){
+    await setDoc(RESULTS_DOC, { votes: { [name]: 1 }, manager: {} });
+    return;
   }
+  await updateDoc(RESULTS_DOC, { [`votes.${name}`]: increment(1) });
 }
 
-async function setLastVoteDate(dateStr){
-  await window.storage.set("last_vote_date", dateStr, false);
+function getLastVoteDate(){
+  return localStorage.getItem("last_vote_date");
+}
+
+function setLastVoteDate(dateStr){
+  localStorage.setItem("last_vote_date", dateStr);
 }
 
 function renderButtons(disabled){
@@ -188,31 +335,32 @@ function renderButtons(disabled){
   });
 }
 
-function renderResults(votes){
+function renderResults(votes, managerScores){
+  managerScores = managerScores || {};
   const box = document.getElementById("results");
   box.innerHTML = "";
-  const max = Math.max(1, ...PARTICIPANTS.map(n => votes[n] || 0));
-  const sorted = [...PARTICIPANTS].sort((a,b) => (votes[b]||0) - (votes[a]||0));
+  const totals = {};
+  PARTICIPANTS.forEach(n => totals[n] = (votes[n] || 0) + (managerScores[n] || 0));
+  const max = Math.max(1, ...PARTICIPANTS.map(n => totals[n]));
+  const sorted = [...PARTICIPANTS].sort((a,b) => totals[b] - totals[a]);
   sorted.forEach(name=>{
-    const count = votes[name] || 0;
-    const pct = Math.round((count / max) * 100);
+    const pct = Math.round((totals[name] / max) * 100);
     const row = document.createElement("div");
     row.className = "row";
     row.innerHTML = `
       <div class="name">${name}</div>
       <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>
-      <div class="count">${count}</div>
+      <div class="count">${totals[name]}</div>
     `;
     box.appendChild(row);
   });
 }
 
 async function castVote(name){
-  const votes = await getVotes();
-  votes[name] = (votes[name] || 0) + 1;
-  await saveVotes(votes);
-  await setLastVoteDate(todayKey());
-  renderResults(votes);
+  await incrementVote(name);
+  setLastVoteDate(todayKey());
+  const data = await getDocData();
+  renderResults(data.votes, data.manager);
   renderButtons(true);
   setStatus(`Ты проголосовал за ${name}. Приходи завтра снова.`, "ok");
 }
@@ -223,11 +371,113 @@ function setStatus(text, cls){
   el.className = "status " + cls;
 }
 
-async function init(){
-  const votes = await getVotes();
-  renderResults(votes);
+const MANAGER_PASSWORD = "boss2026"; // поменяй на свой пароль
+const DEV_PASSWORD = "dev2026"; // поменяй на свой пароль
 
-  const lastDate = await getLastVoteDate();
+async function unlockDev(){
+  const val = document.getElementById("devPass").value;
+  if(val !== DEV_PASSWORD){
+    alert("Неверный пароль");
+    return;
+  }
+  document.getElementById("devLockBox").style.display = "none";
+  document.getElementById("resetAllBtn").style.display = "inline-block";
+  await renderDevBox();
+}
+
+async function renderDevBox(){
+  const data = await getDocData();
+  const box = document.getElementById("devBox");
+  box.style.display = "block";
+  box.innerHTML = "";
+  PARTICIPANTS.forEach(name=>{
+    const votes = data.votes[name] || 0;
+    const manager = data.manager[name] || 0;
+    const row = document.createElement("div");
+    row.className = "dev-row";
+    row.innerHTML = `
+      <div class="name">${name}</div>
+      <div class="val">Голоса: ${votes}</div>
+      <button class="mini-btn" data-action="vote" data-name="${name}">−1 голос</button>
+      <div class="val">Рук.: ${manager}</div>
+      <button class="mini-btn" data-action="manager" data-name="${name}">−1 балл</button>
+      <button class="mini-btn" data-action="reset" data-name="${name}">Обнулить</button>
+    `;
+    box.appendChild(row);
+  });
+  box.querySelectorAll("button").forEach(btn=>{
+    btn.onclick = async () => {
+      const name = btn.dataset.name;
+      const action = btn.dataset.action;
+      const data = await getDocData();
+      if(action === "vote"){
+        data.votes[name] = Math.max(0, (data.votes[name] || 0) - 1);
+      }else if(action === "manager"){
+        data.manager[name] = Math.max(0, (data.manager[name] || 0) - 1);
+      }else if(action === "reset"){
+        data.votes[name] = 0;
+        data.manager[name] = 0;
+      }
+      await setDoc(RESULTS_DOC, { votes: data.votes, manager: data.manager });
+      renderResults(data.votes, data.manager);
+      await renderDevBox();
+    };
+  });
+}
+
+async function resetAll(){
+  if(!confirm("Точно обнулить всё?")) return;
+  await setDoc(RESULTS_DOC, { votes: {}, manager: {} });
+  renderResults({}, {});
+  await renderDevBox();
+}
+
+async function saveManagerScoresData(scores){
+  await setDoc(RESULTS_DOC, { manager: scores }, { merge: true });
+}
+
+async function unlockManager(){
+  const val = document.getElementById("managerPass").value;
+  if(val !== MANAGER_PASSWORD){
+    alert("Неверный пароль");
+    return;
+  }
+  document.getElementById("lockBox").style.display = "none";
+  document.getElementById("managerBox").style.display = "block";
+  document.getElementById("saveManagerBtn").style.display = "inline-block";
+
+  const data = await getDocData();
+  const scores = data.manager;
+  const box = document.getElementById("managerBox");
+  box.innerHTML = "";
+  PARTICIPANTS.forEach(name=>{
+    const row = document.createElement("div");
+    row.className = "manager-row";
+    row.innerHTML = `
+      <div class="name">${name}</div>
+      <input type="number" min="0" data-name="${name}" value="${scores[name] || 0}">
+    `;
+    box.appendChild(row);
+  });
+}
+
+async function saveManagerScores(){
+  const inputs = document.querySelectorAll("#managerBox input");
+  const scores = {};
+  inputs.forEach(inp => {
+    scores[inp.dataset.name] = parseInt(inp.value) || 0;
+  });
+  await saveManagerScoresData(scores);
+  const data = await getDocData();
+  renderResults(data.votes, scores);
+  alert("Баллы сохранены");
+}
+
+async function init(){
+  const data = await getDocData();
+  renderResults(data.votes, data.manager);
+
+  const lastDate = getLastVoteDate();
   const votedToday = lastDate === todayKey();
 
   renderButtons(votedToday);
@@ -237,6 +487,11 @@ async function init(){
     setStatus("Выбери одного человека.", "info");
   }
 }
+
+window.unlockManager = unlockManager;
+window.saveManagerScores = saveManagerScores;
+window.unlockDev = unlockDev;
+window.resetAll = resetAll;
 
 init();
 </script>
