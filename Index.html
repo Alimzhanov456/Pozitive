@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Самый позитивный коллега</title>
+<style>
+  :root{
+    --bg: #fdf6e9;
+    --card: #ffffff;
+    --ink: #2b2320;
+    --muted: #8a7f74;
+    --accent: #ff9d4d;
+    --accent2: #4d8bff;
+    --line: #e9ddc9;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family: 'Segoe UI', Verdana, Arial, sans-serif;
+    display:flex;
+    justify-content:center;
+    padding:32px 16px;
+  }
+  .wrap{
+    width:100%;
+    max-width:620px;
+  }
+  h1{
+    font-size:26px;
+    margin:0 0 4px;
+  }
+  .sub{
+    color:var(--muted);
+    font-size:14px;
+    margin-bottom:24px;
+  }
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:20px;
+    margin-bottom:16px;
+  }
+  .status{
+    font-size:14px;
+    margin-bottom:14px;
+    min-height:18px;
+  }
+  .status.ok{ color:#1a8a4a; }
+  .status.info{ color:var(--muted); }
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap:10px;
+    margin-bottom:6px;
+  }
+  @media (max-width:420px){
+    .grid{grid-template-columns: 1fr;}
+  }
+  button.vote{
+    padding:12px 10px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:#fff;
+    font-size:15px;
+    cursor:pointer;
+    transition: all .15s ease;
+  }
+  button.vote:hover:not(:disabled){
+    border-color:var(--accent);
+    background:#fff6ec;
+  }
+  button.vote:disabled{
+    opacity:.4;
+    cursor:not-allowed;
+  }
+  .results h2{
+    font-size:16px;
+    margin:0 0 14px;
+    color:var(--muted);
+    font-weight:600;
+  }
+  .row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:10px;
+  }
+  .name{
+    width:90px;
+    flex-shrink:0;
+    font-size:14px;
+  }
+  .bar-bg{
+    flex:1;
+    background:#f2ead9;
+    border-radius:8px;
+    height:22px;
+    overflow:hidden;
+  }
+  .bar-fill{
+    height:100%;
+    background:linear-gradient(90deg, var(--accent2), var(--accent));
+    width:0%;
+    transition: width .5s ease;
+    border-radius:8px;
+  }
+  .count{
+    width:26px;
+    text-align:right;
+    font-size:13px;
+    color:var(--muted);
+    flex-shrink:0;
+  }
+  .footer-note{
+    font-size:12px;
+    color:var(--muted);
+    text-align:center;
+    margin-top:10px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Самый позитивный коллега</h1>
+  <div class="sub">Голосуй честно. 1 голос в день. Голосование анонимное.</div>
+
+  <div class="card">
+    <div id="status" class="status info">Загрузка...</div>
+    <div id="buttons" class="grid"></div>
+  </div>
+
+  <div class="card results">
+    <h2>Результаты</h2>
+    <div id="results"></div>
+  </div>
+
+  <div class="footer-note">Голоса видны всем, но кто за кого голосовал — не сохраняется.</div>
+</div>
+
+<script>
+const PARTICIPANTS = ["Халида","Айчурок","Эрбол","Айбек","Наталья","Элдияр","Эмиль"];
+
+function todayKey(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+async function getVotes(){
+  try{
+    const res = await window.storage.get("votes", true);
+    return res ? JSON.parse(res.value) : {};
+  }catch(e){
+    return {};
+  }
+}
+
+async function saveVotes(votes){
+  await window.storage.set("votes", JSON.stringify(votes), true);
+}
+
+async function getLastVoteDate(){
+  try{
+    const res = await window.storage.get("last_vote_date", false);
+    return res ? res.value : null;
+  }catch(e){
+    return null;
+  }
+}
+
+async function setLastVoteDate(dateStr){
+  await window.storage.set("last_vote_date", dateStr, false);
+}
+
+function renderButtons(disabled){
+  const box = document.getElementById("buttons");
+  box.innerHTML = "";
+  PARTICIPANTS.forEach(name=>{
+    const btn = document.createElement("button");
+    btn.className = "vote";
+    btn.textContent = name;
+    btn.disabled = disabled;
+    btn.onclick = () => castVote(name);
+    box.appendChild(btn);
+  });
+}
+
+function renderResults(votes){
+  const box = document.getElementById("results");
+  box.innerHTML = "";
+  const max = Math.max(1, ...PARTICIPANTS.map(n => votes[n] || 0));
+  const sorted = [...PARTICIPANTS].sort((a,b) => (votes[b]||0) - (votes[a]||0));
+  sorted.forEach(name=>{
+    const count = votes[name] || 0;
+    const pct = Math.round((count / max) * 100);
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+      <div class="name">${name}</div>
+      <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>
+      <div class="count">${count}</div>
+    `;
+    box.appendChild(row);
+  });
+}
+
+async function castVote(name){
+  const votes = await getVotes();
+  votes[name] = (votes[name] || 0) + 1;
+  await saveVotes(votes);
+  await setLastVoteDate(todayKey());
+  renderResults(votes);
+  renderButtons(true);
+  setStatus(`Ты проголосовал за ${name}. Приходи завтра снова.`, "ok");
+}
+
+function setStatus(text, cls){
+  const el = document.getElementById("status");
+  el.textContent = text;
+  el.className = "status " + cls;
+}
+
+async function init(){
+  const votes = await getVotes();
+  renderResults(votes);
+
+  const lastDate = await getLastVoteDate();
+  const votedToday = lastDate === todayKey();
+
+  renderButtons(votedToday);
+  if(votedToday){
+    setStatus("Ты уже голосовал сегодня. Возвращайся завтра.", "ok");
+  }else{
+    setStatus("Выбери одного человека.", "info");
+  }
+}
+
+init();
+</script>
+</body>
+</html>
